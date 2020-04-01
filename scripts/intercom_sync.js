@@ -39,7 +39,7 @@ turndownService.addRule('linebreak', {
     const bodyHtml = await page.$eval("article", (el) =>  el.innerHTML);
     const bodyMd = turndownService.turndown(bodyHtml);
     
-    await fs.writeFile("docs/" + id + ".md", `---
+    await fs.writeFile("docs/ja/" + id + ".md", `---
 id: ${id}
 title: ${title}
 desc: ${desc}
