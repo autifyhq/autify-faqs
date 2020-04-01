@@ -1,0 +1,13 @@
+{
+  "name": "intercom_2",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^0.12.1",
+    "turndown": "^6.0.0"
+  },
+  "scripts": {
+    "sync": "node scripts/intercom_sync.js"
+  }
+}
