@@ -31,21 +31,29 @@ turndownService.addRule('linebreak', {
     return Promise.resolve(urls);
   });
 
+  let index = 1;
   for(let url of urls) {
-    const id = url.match(/\/(\d+)-.+$/)[1];
-    await page.goto(baseUrl + url);
-    const title = await page.$eval("h1.t__h1", (el) =>  el.innerText);
-    const desc = await page.$eval(".article__desc", (el) =>  el.innerText);
-    const bodyHtml = await page.$eval("article", (el) =>  el.innerHTML);
-    const bodyMd = turndownService.turndown(bodyHtml);
+    console.log(`updating: ${url} (${index}/${urls.length})`);
+    try {
+      const id = url.match(/\/(\d+)-.+$/)[1];
+      await page.goto(baseUrl + url);
+      const title = await page.$eval("h1.t__h1", (el) =>  el.innerText);
+      const desc = await page.$eval(".article__desc", (el) =>  el.innerText);
+      const bodyHtml = await page.$eval("article", (el) =>  el.innerHTML);
+      const bodyMd = turndownService.turndown(bodyHtml);
     
-    await fs.writeFile("docs/ja/" + id + ".md", `---
+      await fs.writeFile("docs/ja/" + id + ".md", `---
 id: ${id}
 title: ${title}
 desc: ${desc}
 ---
 
 ${bodyMd}`);
+    } catch (e) {
+      console.log(e);
+    }
+
+    index++;
   };
 
   await browser.close();
