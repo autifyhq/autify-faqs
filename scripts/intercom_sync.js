@@ -41,14 +41,23 @@ turndownService.addRule('linebreak', {
       const desc = await page.$eval(".article__desc", (el) =>  el.innerText);
       const bodyHtml = await page.$eval("article", (el) =>  el.innerHTML);
       const bodyMd = turndownService.turndown(bodyHtml);
-    
-      await fs.writeFile("docs/ja/" + id + ".md", `---
-id: ${id}
-title: ${title}
-desc: ${desc}
----
 
-${bodyMd}`);
+      const filename = "docs/ja/" + id + ".md"
+      const file = await fs.readFile(filename)
+      const matches = new RegExp(/zid: (\d+)/).exec(file)
+
+      let frontMatters = {id: id, title: title, desc: desc}
+      if (matches !== null) {
+        frontMatters["zid"] = matches[1]
+      }
+
+      let frontMatterStr = "---\n"
+      for (let key in frontMatters) {
+        frontMatterStr += key + ": " + frontMatters[key] + "\n"
+      }
+      frontMatterStr += "---\n\n"
+    
+      await fs.writeFile("docs/ja/" + id + ".md", frontMatterStr + bodyMd)
     } catch (e) {
       console.log(e);
     }
