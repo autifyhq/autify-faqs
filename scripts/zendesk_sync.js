@@ -39,7 +39,7 @@ class Zendesk {
       if (!error && statusType == 2) {
         cb(body)
       } else {
-        console.log(error, response, body)
+        console.log(body)
         throw new Error(error)
       }
     })
@@ -121,7 +121,6 @@ class FileHandler {
 
   readFile(cb) {
     fs.readFile(this.filePath, 'utf-8', (err, content) => {
-      console.log(err)
       this.content = content
       if (!err) {
         remarkProcessor.process(content, (err, vfile) => {
@@ -130,11 +129,17 @@ class FileHandler {
 
           cb(this)
         })
+      } else {
+        cb(this)
       }
     })
   }
 
   getZdArticle() {
+    if (this.vfile == null) {
+      return null
+    }
+
     return {
       "title": this.vfile.data.title,
       "body": this.vfile.contents,
@@ -151,6 +156,11 @@ class FileHandler {
   }
 
   setZendeskId(zid, cb) {
+    if(!this.exist()) {
+      cb()
+      return
+    }
+
     const newData = this.content.replace("---\n\n", `zid: ${zid}\n---\n\n`)
     fs.writeFile(this.filePath, newData, (err) => {
       if (err) throw err
@@ -171,37 +181,59 @@ class ArticleHandler {
     this.zendesk = new Zendesk()
   }
 
-  pushToZendesk(includeOriginal = true) {
+  pushToZendesk(includeOriginal = true, cb) {
     this.jaFileHandler.readFile(() => {
-      try {
-        this.enFileHandler.readFile(() => {
-          this.createOrUpdateArticle(includeOriginal)
-        })
-      } catch {
-        this.createOrUpdateArticle(includeOriginal)
-      }
+      this.enFileHandler.readFile(() => {
+        this.createOrUpdateArticle(includeOriginal, cb)
+      })
     })
   }
 
-  createOrUpdateArticle(includeOriginal) {
+  createOrUpdateArticle(includeOriginal, cb) {
 
     let translations = []
+
+    let jaArticle, enArticle
 
     const zendeskId = this.jaFileHandler.getZendeskId()
 
     if (includeOriginal) {
       translations.push(this.jaFileHandler.getZdArticle())
     }
-    if (this.enFileHandler.exist) {
+    if (this.enFileHandler.exist()) {
       translations.push(this.enFileHandler.getZdArticle())
     }
 
     if (zendeskId) {
       //update
       console.log("to be updated: " + this.jaFileHandler.filePath)
-      //this.zendesk.updateArticle(zendeskId, params, (article) => {
-      //})
 
+      const nextTranslation = (index) => {
+        if (index >= translations.length) {
+          cb()
+          return
+        }
+
+        const next = () => {
+          nextTranslation(index + 1)
+        }
+
+        const article = translations[index]
+        if (article["locale"] == "en-us") {
+          if (this.enFileHandler.getZendeskId()) {
+            //update translation
+            this.zendesk.updateTranslation(zendeskId, article["locale"], article, next)
+          } else {
+            //create translation
+            this.zendesk.createTranslation(zendeskId, article, next)
+          }
+        } else {
+          this.zendesk.updateTranslation(zendeskId, article["locale"], article, next)
+        }
+      }
+      nextTranslation(0)
+
+      /*
       translations.forEach((article) => {
         if (article["locale"] == "en-us") {
           if (this.enFileHandler.getZendeskId()) {
@@ -215,6 +247,7 @@ class ArticleHandler {
           this.zendesk.updateTranslation(zendeskId, article["locale"], article)
         }
       })
+      */
     } else {
       //create
       console.log("create: " + this.jaFileHandler.filePath)
@@ -228,29 +261,39 @@ class ArticleHandler {
       }
       this.zendesk.createArticle(faqSectionId, params, (article) => {
         this.jaFileHandler.setZendeskId(article.id, () => {
-        })
-        this.enFileHandler.setZendeskId(article.id, () => {
+          this.enFileHandler.setZendeskId(article.id, cb)
         })
       })
     }
   }
 }
 
+let allFiles = []
+const directoryPath = path.join(__dirname, '..', 'docs', "ja")
+
+function nextFile(index) {
+  if (index >= allFiles.length) {
+    return
+  }
+
+  const filename = allFiles[index]
+  const filePath = path.join(directoryPath, filename)
+  const articleHandler = new ArticleHandler(filePath)
+
+  console.log(`syncing: ${filename} (${index + 1}/${allFiles.length})`)
+
+  articleHandler.pushToZendesk(true, () => {
+    nextFile(index + 1)
+  })
+}
 
 function syncArticles() {
   //read all original files
-  const directoryPath = path.join(__dirname, '..', 'docs', "ja")
   fs.readdir(directoryPath, function (err, files) {
     if (err) throw err
   
-    for (let i = 0; i < files.length; i++) {
-      const filename = files[i]
-      const filePath = path.join(directoryPath, filename)
-      const articleHandler = new ArticleHandler(filePath)
-      setTimeout(() => {
-        articleHandler.pushToZendesk()
-      }, i * 1000)
-    }
+    allFiles = files
+    nextFile(0)
   })
 }
 
